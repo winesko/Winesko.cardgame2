@@ -4,15 +4,22 @@ import { CollectionTab } from './components/CollectionTab';
 import { ProfileTab } from './components/ProfileTab';
 import { ArenaTab } from './components/ArenaTab';
 import { ShopTab } from './components/ShopTab';
-import { UpgradeTab } from './components/UpgradeTab'; // Новая вкладка
+import { UpgradeTab } from './components/UpgradeTab';
 import { MASTER_CARDS } from './cardsData';
+
+// ⚠️ ВСТАВЬТЕ СЮДА ВАШИ ДАННЫЕ ИЗ SUPABASE:
+const SUPABASE_URL = 'https://iundgnfebsmcohzmmqln.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_Y97PlydF4l8rsh5C9D0jNA_eOZkX-9s'; // Публичный ключ (Publishable/anon)
 
 const tabs = ['home', 'collection', 'arena', 'shop', 'profile'] as const;
 type Tab = typeof tabs[number];
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<Tab>('home');
-  const [isUpgrading, setIsUpgrading] = useState(false); // Режим модернизации
+  const [isUpgrading, setIsUpgrading] = useState(false);
+
+  // ID пользователя из Telegram
+  const tgId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
 
   // Валюты
   const [coins, setCoins] = useState<number>(() => Number(localStorage.getItem('game_coins')) || 1000);
@@ -31,14 +38,69 @@ export default function App() {
     } catch (e) { return []; }
   });
 
-  // Сохранение
+  // --- 🟢 ЗАГРУЗКА ИЗ ОБЛАКА ПРИ СТАРТЕ ---
   useEffect(() => {
+    if (!tgId) return;
+
+    const loadFromCloud = async () => {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/game_saves?telegram_id=eq.${tgId}`, {
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`
+          }
+        });
+        const data = await res.json();
+        
+        if (data && data.length > 0 && data[0].save_data && Object.keys(data[0].save_data).length > 0) {
+          const saved = data[0].save_data;
+          if (saved.coins !== undefined) setCoins(saved.coins);
+          if (saved.rolls !== undefined) setRolls(saved.rolls);
+          if (saved.dust !== undefined) setDust(saved.dust);
+          if (saved.cups !== undefined) setCups(saved.cups);
+          if (saved.collection !== undefined) setCollection(saved.collection);
+          console.log("Прогресс загружен из базы!");
+        }
+      } catch (error) {
+        console.error("Ошибка загрузки:", error);
+      }
+    };
+
+    loadFromCloud();
+  }, [tgId]);
+
+  // --- 💾 СОХРАНЕНИЕ (LocalStorage + Supabase) ---
+  useEffect(() => {
+    // 1. Сохраняем локально
     localStorage.setItem('game_coins', coins.toString());
     localStorage.setItem('game_rolls', rolls.toString());
     localStorage.setItem('game_dust', dust.toString());
     localStorage.setItem('game_cups', cups.toString());
     localStorage.setItem('game_collection', JSON.stringify(collection));
-  }, [coins, rolls, dust, cups, collection]);
+
+    // 2. Сохраняем в облако (с задержкой 2 сек, чтобы не спамить базу)
+    if (tgId) {
+      const saveTimer = setTimeout(async () => {
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/game_saves?telegram_id=eq.${tgId}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': `Bearer ${SUPABASE_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              save_data: { coins, rolls, dust, cups, collection }
+            })
+          });
+        } catch (error) {
+          console.error("Ошибка сохранения:", error);
+        }
+      }, 2000);
+
+      return () => clearTimeout(saveTimer);
+    }
+  }, [coins, rolls, dust, cups, collection, tgId]);
 
   // ⏱️ ТАЙМЕР ЗОЛОТА: +10 монет каждые 10 секунд
   useEffect(() => {
@@ -54,7 +116,6 @@ export default function App() {
         <h1 className="text-lg font-bold text-[#c4f000]">CARD GAME PROTOTYPE</h1>
       </header>
 
-      {/* Если включена модернизация, показываем её на весь экран */}
       {isUpgrading ? (
         <UpgradeTab 
           collection={collection} 
