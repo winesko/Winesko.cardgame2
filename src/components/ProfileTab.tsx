@@ -12,8 +12,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ coins, collectionCount, 
       <div className="flex items-center gap-4 bg-[#1e1e1e] p-4 rounded-2xl border border-gray-800 mb-6">
         <div className="w-16 h-16 rounded-full bg-blue-500 flex items-center justify-center text-3xl">🧑‍🎤</div>
         <div>
-          <h2 className="text-xl font-bold text-white">Твой Друг</h2>
-          <p className="text-xs text-gray-400">ID: 12345678</p>
+          <h2 className="text-xl font-bold text-white">{window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name || 'Игрок'}</h2>
+          <p className="text-xs text-gray-400">ID: {window.Telegram?.WebApp?.initDataUnsafe?.user?.id || '00000000'}</p>
         </div>
       </div>
 
